@@ -12,7 +12,8 @@ from dotenv import load_dotenv
 st.set_page_config(page_title="Naver API Shopping Dashboard", layout="wide")
 
 # Load Environment Variables
-load_dotenv()
+env_path = os.path.join(os.path.dirname(__file__), '.env')
+load_dotenv(env_path)
 
 # Helper function to get API keys
 def get_api_keys():

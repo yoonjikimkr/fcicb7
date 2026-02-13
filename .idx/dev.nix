@@ -25,16 +25,10 @@
     previews = {
       enable = true;
       previews = {
-        # web = {
-        #   # Example: run "npm run dev" with PORT set to IDX's defined port for previews,
-        #   # and show it in IDX's web preview panel
-        #   command = ["npm" "run" "dev"];
-        #   manager = "web";
-        #   env = {
-        #     # Environment variables to set for your server
-        #     PORT = "$PORT";
-        #   };
-        # };
+        web = {
+          command = [".venv/bin/streamlit" "run" "naverapieda/dashboard.py" "--server.port" "$PORT" "--server.address" "0.0.0.0" "--browser.gatherUsageStats" "false"];
+          manager = "web";
+        };
       };
     };
     # Workspace lifecycle hooks
