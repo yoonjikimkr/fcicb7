@@ -72,6 +72,40 @@ def visualize():
     plt.savefig(os.path.join(img_dir, "age_gender_dist.png"))
     plt.close()
 
+    # 5. Hourly Trend by Top 10 Gu
+    print("Creating Hourly trend by Top 10 Gu chart...")
+    top_10_gu_names = df.groupby("sigungu_name")["pop_count"].sum().sort_values(ascending=False).head(10).index
+    gu_hour_trend = df[df["sigungu_name"].isin(top_10_gu_names)].groupby(["sigungu_name", "hour"])["pop_count"].sum().reset_index()
+    
+    plt.figure(figsize=(14, 8))
+    sns.lineplot(data=gu_hour_trend, x="hour", y="pop_count", hue="sigungu_name", marker='o', linewidth=2)
+    plt.title("상위 10개 구별 시간대별 생활인구 흐름", fontsize=18)
+    plt.xlabel("시간 (Hour)", fontsize=12)
+    plt.ylabel("생활인구 합계", fontsize=12)
+    plt.xticks(range(0, 24))
+    plt.grid(True, linestyle='--', alpha=0.6)
+    plt.legend(title="구명", bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.tight_layout()
+    plt.savefig(os.path.join(img_dir, "hourly_trend_top_gu.png"))
+    plt.close()
+
+    # 6. Hourly Trend by Top 10 Dong
+    print("Creating Hourly trend by Top 10 Dong chart...")
+    top_10_dong_names = df.groupby("dong_name")["pop_count"].sum().sort_values(ascending=False).head(10).index
+    dong_hour_trend = df[df["dong_name"].isin(top_10_dong_names)].groupby(["dong_name", "hour"])["pop_count"].sum().reset_index()
+    
+    plt.figure(figsize=(14, 8))
+    sns.lineplot(data=dong_hour_trend, x="hour", y="pop_count", hue="dong_name", marker='o', linewidth=2)
+    plt.title("상위 10개 행정동별 시간대별 생활인구 흐름", fontsize=18)
+    plt.xlabel("시간 (Hour)", fontsize=12)
+    plt.ylabel("생활인구 합계", fontsize=12)
+    plt.xticks(range(0, 24))
+    plt.grid(True, linestyle='--', alpha=0.6)
+    plt.legend(title="행정동명", bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.tight_layout()
+    plt.savefig(os.path.join(img_dir, "hourly_trend_top_dong.png"))
+    plt.close()
+
     print(f"All visualizations saved to {img_dir}")
 
 if __name__ == "__main__":
