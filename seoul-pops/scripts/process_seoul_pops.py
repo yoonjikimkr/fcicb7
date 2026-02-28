@@ -5,6 +5,7 @@ def process_data():
     base_dir = "/Users/kimyo/Documents/PARA/1_Project/Antigravity/fcicb7/seoul-pops"
     raw_csv = os.path.join(base_dir, "data/raw/LOCAL_PEOPLE_DONG_202601.csv")
     mapping_xlsx = os.path.join(base_dir, "data/processed/mapping_info.xlsx")
+    output_parquet = os.path.join(base_dir, "data/processed/seoul_pops_tidy.parquet")
     output_csv = os.path.join(base_dir, "data/processed/seoul_pops_tidy_202601.csv")
 
     print("Loading data...")
@@ -22,7 +23,6 @@ def process_data():
     print("Loading mapping info...")
     mapping_df = pd.read_excel(mapping_xlsx)
     # The first row contains headers like H_SDNG_CD, H_DNG_CD
-    # We want H_DNG_CD (8 digits) and H_DNG_NM
     mapping_df.columns = mapping_df.iloc[0]
     mapping_df = mapping_df[1:]
     mapping_df = mapping_df[["H_DNG_CD", "CT_NM", "H_DNG_NM"]].rename(columns={
@@ -53,8 +53,20 @@ def process_data():
     tidy_df["age_group"] = tidy_df["segment"].apply(lambda x: x[1:])
     tidy_df = tidy_df.drop(columns=["segment"])
 
-    print(f"Saving tidy data to {output_csv}...")
-    tidy_df.to_csv(output_csv, index=False, encoding="utf-8-sig")
+    # Basic cleaning
+    tidy_df["date"] = pd.to_datetime(tidy_df["date"].astype(str), format="%Y%m%d")
+    
+    # Final check on column names (Gu/Dong derived variables are already in sigungu_name and dong_name)
+    # User might want separate gu/dong if they aren't explicit
+    # sigungu_name = Gu, dong_name = Dong
+    
+    print(f"Saving tidy data to {output_parquet}...")
+    tidy_df.to_parquet(output_parquet, index=False)
+    
+    # Keep CSV for size comparison this time, then we can delete
+    # print(f"Saving temporary CSV for size comparison...")
+    # tidy_df.to_csv(output_csv, index=False, encoding="utf-8-sig")
+    
     print("Process completed successfully!")
 
 if __name__ == "__main__":
