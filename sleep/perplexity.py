@@ -51,19 +51,23 @@ ACTIVES_MAP = {
 
 
 def tag_actives(text: str) -> str | None:
-    """제품명에서 주요 성분 키워드를 추출"""
+    """제품명에서 주요 성분 키워드를 추출 (우선순위 반영)"""
     text_lower = (text or "").lower()
     found = []
+    # ACTIVES_MAP의 순서대로 순회하므로, 마그네슘이 글리신보다 앞에 있으면 우선권을 갖습니다.
     for active_key, keywords in ACTIVES_MAP.items():
         if any(kw in text_lower for kw in keywords):
             found.append(active_key)
-    return ", ".join(sorted(set(found))) if found else None
+    
+    # 정렬(sorted)을 제거하여 마그네슘+글리신 제품이 글리신으로 분류되는 것 방지
+    return ", ".join(found) if found else None
 
 
 def first_active(x: str | None) -> str:
     """첫 번째 주성분을 반환 (카테고리 분류용)"""
-    if not x:
+    if not isinstance(x, str) or not x:
         return "기타/복합"
+    # 첫 번째 성분을 주성분으로 보되, '복합제' 키워드가 있다면 필터링 로직 추가 가능
     return x.split(",")[0].strip()
 
 

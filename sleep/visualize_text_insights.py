@@ -27,7 +27,8 @@ def analyze_text_layer():
         df.loc[df['product_name_lower'].str.contains('melatonin|멜라토닌'), 'main_active'] = 'melatonin'
         df.loc[df['product_name_lower'].str.contains('magnesium|마그네슘'), 'main_active'] = 'magnesium'
         df.loc[df['product_name_lower'].str.contains('valerian|passion|chamomile|발레리안|카모마일'), 'main_active'] = 'valerian'
-        df.loc[df['product_name_lower'].str.contains('formula|complex|sleep|rest|blend'), 'main_active'] = '기타/복합'
+        # 아래 줄은 단일제임에도 이름에 sleep이 들어간 경우 '복합제'로 오분류하므로 주석 처리하거나 제거합니다.
+        # df.loc[df['product_name_lower'].str.contains('formula|complex|sleep|rest|blend'), 'main_active'] = '기타/복합'
 
     # Combine text fields into one text corpus per product (handle NaNs)
     df['text_corpus'] = (
@@ -64,8 +65,8 @@ def analyze_text_layer():
     target_segments = ['멜라토닌', '마그네슘', '천연 허브', '복합 포뮬러']
     matrix = df[df['segment'].isin(target_segments)].groupby('segment')[list(needs_dict.keys())].mean() * 100
     
-    # Reorder segments for better visualization
-    matrix = matrix.loc[['멜라토닌', '마그네슘', '천연 허브', '복합 포뮬러']]
+    # Reindex instead of loc to handle missing categories with 0 instead of crashing
+    matrix = matrix.reindex(target_segments).fillna(0)
     
     # Visualization: Heatmap
     plt.figure(figsize=(10, 6))

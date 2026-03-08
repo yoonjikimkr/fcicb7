@@ -58,75 +58,97 @@ EXTRACT_PDP_JS = """
 }
 """
 
-def scrape_top_pdps(limit=100):
+def scrape_top_pdps(limit=500):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
-    # Get top 100 products by review count that haven't been fully scraped
+    # 아직 수집되지 않은 (상세데이터가 비어있는) 모든 상품을 리뷰 많은 순으로 가져옵니다.
     cursor.execute('''
         SELECT product_id, product_url 
         FROM iherb_sleep_products 
+        WHERE subcategory IS NULL OR subcategory = ''
         ORDER BY review_count DESC 
         LIMIT ?
     ''', (limit,))
     
     products = cursor.fetchall()
-    print(f"진행할 상품 수: {len(products)}개")
+    print(f"🚀 추가로 수집할 상품: {len(products)}개 (전체 수집 목적)")
 
     if not products:
+        print("이미 모든 상품 정보가 최신 상태입니다.")
         conn.close()
         return
 
     with sync_playwright() as pw:
-        browser = pw.chromium.launch(headless=False) # Headless=False to avoid some detections, or True
+        browser = pw.chromium.launch(headless=False) 
         context = browser.new_context(
             locale="ko-KR",
-            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-            extra_http_headers={"Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7"}
+            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
         )
         
-        # Add CDP stealth tactics if needed
         page = context.new_page()
 
         for idx, (pid, url) in enumerate(products, 1):
             full_url = url if url.startswith('http') else f"https://kr.iherb.com{url}"
             print(f"[{idx}/{len(products)}] 방문 중: {full_url}")
             
-            try:
-                page.goto(full_url, wait_until="domcontentloaded", timeout=45000)
-                page.wait_for_timeout(3000) # Wait for elements to load
-                page.mouse.wheel(0, 1000)   # Scroll a bit
-                page.wait_for_timeout(1000)
-                
-                # Check for Cloudflare / CAPTCHA
-                if "cloudflare" in page.content().lower() or "captcha" in page.content().lower():
-                    print("  ⚠️ Cloudflare/CAPTCHA 감지됨! 10초 대기...")
-                    page.wait_for_timeout(10000)
-                
-                # Extract data via JS
-                data = page.evaluate(EXTRACT_PDP_JS)
-                
-                print(f"  -> Subcat: {data['subcategory'][:30]}... | Badges: {data['badges'][:30]}...")
-                
-                # Update DB
-                cursor.execute('''
-                    UPDATE iherb_sleep_products 
-                    SET subcategory = ?, ingredient_snippet = ?, badges = ?, list_price_krw = ?
-                    WHERE product_id = ?
-                ''', (data['subcategory'], data['ingredient_snippet'], data['badges'], data['list_price_krw'], pid))
-                conn.commit()
-                
-            except Exception as e:
-                print(f"  ❌ 에러 발생: {e}")
+            retry_count = 0
+            while retry_count < 3:
+                try:
+                    page.goto(full_url, wait_until="domcontentloaded", timeout=45000)
+                    page.wait_for_timeout(2500)
+                    
+                    # ⚠️ 본인 확인(Cloudflare) 감지 로직
+                    content = page.content().lower()
+                    if "verify you are " in content or "press and hold" in content or "cloudflare" in content:
+                        print("🤖 보안 확인 감지! 해결을 시도합니다...")
+                        page.wait_for_timeout(3000)
+                        target = page.locator("iframe[src*='challenges'], #turnstile-wrapper").first
+                        if target.is_visible():
+                            box = target.bounding_box()
+                            if box:
+                                page.mouse.move(box['x'] + box['width']/2, box['y'] + box['height']/2, steps=10)
+                                page.mouse.down()
+                                page.wait_for_timeout(random.randint(4000, 5500))
+                                page.mouse.up()
+                                page.wait_for_timeout(2000)
+                        
+                        if any(x in page.content().lower() for x in ["verify you are", "press and hold"]):
+                            print("👉 여전히 보안 확인이 떠 있습니다. 수동으로 해결 혹은 10초 대기...")
+                            page.wait_for_timeout(10000)
+
+                    # 데이터 추출
+                    data = page.evaluate(EXTRACT_PDP_JS)
+                    
+                    if not data['subcategory'] and not data['ingredient_snippet']:
+                        # 가끔 iHerb가 빈 페이지를 보여줄 수 있음
+                        print("  ⚠ 데이터가 비어있음, 스크롤 후 재시도...")
+                        page.mouse.wheel(0, 500)
+                        page.wait_for_timeout(2000)
+                        data = page.evaluate(EXTRACT_PDP_JS)
+
+                    # DB 업데이트
+                    cursor.execute('''
+                        UPDATE iherb_sleep_products 
+                        SET subcategory = ?, ingredient_snippet = ?, badges = ?, list_price_krw = ?
+                        WHERE product_id = ?
+                    ''', (data['subcategory'], data['ingredient_snippet'], data['badges'], data['list_price_krw'], pid))
+                    conn.commit()
+                    break
+                    
+                except Exception as e:
+                    retry_count += 1
+                    print(f"  ❌ 에러 발생 (재시도 {retry_count}): {e}")
+                    page.wait_for_timeout(3000)
             
-            # Anti-bot delay
-            delay = random.uniform(3, 7)
-            print(f"  ⏳ {delay:.1f}초 대기 중...")
+            # Anti-bot 랜덤 지연
+            delay = random.uniform(1.5, 3.5)
             time.sleep(delay)
 
         browser.close()
     conn.close()
-    print("완료되었습니다!")
+    print("\n🎉 모든 수집이 완료되었습니다!")
 
 if __name__ == "__main__":
-    scrape_top_pdps(100)
+    # 전체 432개 제품을 모두 처리하기 위해 리밋 확장
+    scrape_top_pdps(500)
